@@ -25,20 +25,16 @@ def flatten(string):
 
 def getLatestBlock():
     print(
-        "Searching for latest liquidity pool in range of last {block_range} blocks...".format(
-            block_range=block_range
-        )
+        f"Searching for latest liquidity pool in range of last {block_range} blocks..."
     )
 
-    get_block_num_endpoint = """
-    {url}
+    get_block_num_endpoint = f"""
+    {ether_scan_rest_endpoint}
     ?module=block
     &action=getblocknobytime
-    &timestamp={time}
+    &timestamp={int(time.time())}
     &closest=before
-    &apikey={api_key}""".format(
-        url=ether_scan_rest_endpoint, time=int(time.time()), api_key=ether_scan_api_key
-    )
+    &apikey={ether_scan_api_key}"""
     response = requests.get(flatten(get_block_num_endpoint))
     latest_block_number = int(response.json()["result"])
 
@@ -46,31 +42,20 @@ def getLatestBlock():
 
 
 def getEventLogs(latest_block_number):
-    get_event_logs_endpoint = """
-    {url}
+    get_event_logs_endpoint = f"""
+    {ether_scan_rest_endpoint}
     ?module=logs
     &action=getLogs
-    &address={address}
-    &fromBlock={fromBlock}
-    &toBlock={toBlock}
-    &apikey={api_key}""".format(
-        url=ether_scan_rest_endpoint,
-        fromBlock=latest_block_number - block_range,
-        toBlock=latest_block_number,
-        api_key=ether_scan_api_key,
-        address=uniswap_V3_factory_address,
-    )
+    &address={uniswap_V3_factory_address}
+    &fromBlock={latest_block_number - block_range}
+    &toBlock={latest_block_number}
+    &apikey={ether_scan_api_key}"""
     response = requests.get(flatten(get_event_logs_endpoint))
     result_container = response.json()["result"]
 
     try:
         latest_liquidity_pool = result_container[len(result_container) - 1]
     except:
-        print(
-            "No new liquidity pool found for the last {range} blocks!".format(
-                range=block_range
-            )
-        )
         raise RuntimeError
 
     token_a_topic = latest_liquidity_pool["topics"][1]
@@ -84,7 +69,7 @@ def getEventLogs(latest_block_number):
 
 
 def getTokenData(token_a_address, token_b_address):
-    token_a_data_query = """
+    token_a_data_query = f"""
   {{
     token(id:"{token_a_address}") {{
       symbol
@@ -94,10 +79,8 @@ def getTokenData(token_a_address, token_b_address):
       poolCount
     }}
   }}
-  """.format(
-        token_a_address=token_a_address
-    )
-    token_b_data_query = """
+  """
+    token_b_data_query = f"""
   {{
     token(id:"{token_b_address}") {{
       symbol
@@ -107,9 +90,7 @@ def getTokenData(token_a_address, token_b_address):
       poolCount
     }}
   }}
-  """.format(
-        token_b_address=token_b_address
-    )
+  """
 
     response_a = requests.post(
         uniswap_V3_graphql_endpoint,
@@ -136,6 +117,7 @@ def main():
     try:
         token_addresses = getEventLogs(latest_block_number)
     except RuntimeError:
+        print(f"No new liquidity pool found for the last {block_range} blocks!")
         raise SystemExit
     except:
         print("Error: failed whilst retrieving event logs")
@@ -148,14 +130,12 @@ def main():
         raise SystemExit
 
     print(
-        "Success!\nFound new liquidity pool created within range of last {range} blocks.".format(
-            range=block_range
-        )
+        f"Success!\nFound new liquidity pool created within range of last {block_range} blocks."
     )
-    print("Token 1 Symbol: {symbol}".format(symbol=token_symbols[0]))
-    print("Token 1 Address: {address}".format(address=token_addresses[0]))
-    print("Token 2 Symbol: {symbol}".format(symbol=token_symbols[1]))
-    print("Token 2 Address: {address}".format(address=token_addresses[1]))
+    print(f"Token 1 Symbol: {token_symbols[0]}")
+    print(f"Token 1 Address: {token_addresses[0]}")
+    print(f"Token 2 Symbol: {token_symbols[1]}")
+    print(f"Token 2 Address: {token_addresses[1]}")
 
 
 main()
