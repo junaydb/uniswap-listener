@@ -1,21 +1,19 @@
+#!/usr/bin/env python3
+
 import requests
 import time
+import sys
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
-
-ether_scan_api_key = os.environ.get("ETHERSCAN_KEY")
+etherscan_api_key = os.environ.get("ETHERSCAN_KEY")
 ether_scan_rest_endpoint = "https://api.etherscan.io/api"
 uniswap_V3_factory_address = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 uniswap_V3_graphql_endpoint = (
     "https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3"
 )
 
-block_range = int(input("Enter block range: "))
 
-
-def flatten(string):
+def flattenString(string):
     split = string.split("\n")
     flattened = ""
     for line in split:
@@ -23,7 +21,7 @@ def flatten(string):
     return flattened
 
 
-def getLatestBlock():
+def getLatestBlock(block_range):
     print(
         f"Searching for latest liquidity pool in range of last {block_range} blocks..."
     )
@@ -34,14 +32,14 @@ def getLatestBlock():
     &action=getblocknobytime
     &timestamp={int(time.time())}
     &closest=before
-    &apikey={ether_scan_api_key}"""
-    response = requests.get(flatten(get_block_num_endpoint))
+    &apikey={etherscan_api_key}"""
+    response = requests.get(flattenString(get_block_num_endpoint))
     latest_block_number = int(response.json()["result"])
 
     return latest_block_number
 
 
-def getEventLogs(latest_block_number):
+def getEventLogs(latest_block_number, block_range):
     get_event_logs_endpoint = f"""
     {ether_scan_rest_endpoint}
     ?module=logs
@@ -49,8 +47,8 @@ def getEventLogs(latest_block_number):
     &address={uniswap_V3_factory_address}
     &fromBlock={latest_block_number - block_range}
     &toBlock={latest_block_number}
-    &apikey={ether_scan_api_key}"""
-    response = requests.get(flatten(get_event_logs_endpoint))
+    &apikey={etherscan_api_key}"""
+    response = requests.get(flattenString(get_event_logs_endpoint))
     result_container = response.json()["result"]
 
     try:
@@ -70,27 +68,27 @@ def getEventLogs(latest_block_number):
 
 def getTokenData(token_a_address, token_b_address):
     token_a_data_query = f"""
-  {{
-    token(id:"{token_a_address}") {{
-      symbol
-      name
-      decimals
-      volumeUSD
-      poolCount
+    {{
+      token(id:"{token_a_address}") {{
+        symbol
+        name
+        decimals
+        volumeUSD
+        poolCount
+      }}
     }}
-  }}
-  """
+    """
     token_b_data_query = f"""
-  {{
-    token(id:"{token_b_address}") {{
-      symbol
-      name
-      decimals
-      volumeUSD
-      poolCount
+    {{
+      token(id:"{token_b_address}") {{
+        symbol
+        name
+        decimals
+        volumeUSD
+        poolCount
+      }}
     }}
-  }}
-  """
+    """
 
     response_a = requests.post(
         uniswap_V3_graphql_endpoint,
@@ -107,17 +105,19 @@ def getTokenData(token_a_address, token_b_address):
     return [token_a_symbol, token_b_symbol]
 
 
-def main():
+def defaultMode():
+    block_range = int(input("Enter block range: "))
+
     try:
-        latest_block_number = getLatestBlock()
+        latest_block_number = getLatestBlock(block_range)
     except:
         print("Error: failed whilst retrieving latest block number")
         raise SystemExit
 
     try:
-        token_addresses = getEventLogs(latest_block_number)
+        token_addresses = getEventLogs(latest_block_number, block_range)
     except RuntimeError:
-        print(f"No new liquidity pool found for the last {block_range} blocks!")
+        print(f"No new liquidity pool found for the last {block_range} blocks")
         raise SystemExit
     except:
         print("Error: failed whilst retrieving event logs")
@@ -130,12 +130,43 @@ def main():
         raise SystemExit
 
     print(
-        f"Success!\nFound new liquidity pool created within range of last {block_range} blocks."
+        f"Success!\nFound new liquidity pool created within range of last {block_range} blocks"
     )
     print(f"Token 1 Symbol: {token_symbols[0]}")
     print(f"Token 1 Address: {token_addresses[0]}")
     print(f"Token 2 Symbol: {token_symbols[1]}")
     print(f"Token 2 Address: {token_addresses[1]}")
+
+
+def listenMode():
+    print("TO-DO: Add listen mode")
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("No mode specified. Using default mode...")
+        try:
+            defaultMode()
+        except KeyboardInterrupt:
+            None
+        exit(0)
+
+    match sys.argv[1]:
+        case "-l" | "-listen":
+            print("Using listen mode...")
+            try:
+                listenMode()
+            except KeyboardInterrupt:
+                None
+        case "-d" | "-default":
+            print("Using default mode...")
+            try:
+                defaultMode()
+            except KeyboardInterrupt:
+                None
+        case _:
+            print("Invalid option. Exiting...")
+            exit(0)
 
 
 main()
